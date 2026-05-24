@@ -194,7 +194,7 @@ def main():
     # Dataset definitions: (display_name, glob_pattern_relative_to_datadir)
     # Adjust folder names and extensions to match your actual extracted archive
     datasets = [
-        ("SMIYC RA-21",  "RoadAnomaly21/images/*.jpg"),
+        ("SMIYC RA-21",  "RoadAnomaly21/images/*.png"),
         ("SMIYC RO-21",  "RoadObsticle21/images/*.webp"),
         ("FS L&F",       "LostAndFound/images/*.png"),
         ("FS Static",    "fs_static/images/*.jpg"),
