@@ -114,6 +114,16 @@ COCO_TO_CITYSCAPES[127] = 9   # dirt-merged     → terrain
 COCO_TO_CITYSCAPES[131] = 9   # rock-merged     → terrain
 COCO_TO_CITYSCAPES[132] = 3   # wall-other-merged → wall
 
+# --- additional stuff mappings ---
+COCO_TO_CITYSCAPES[87]  = 1   # floor-wood         → sidewalk
+COCO_TO_CITYSCAPES[98]  = 0   # railroad            → road
+COCO_TO_CITYSCAPES[102] = 9   # sea                 → terrain
+COCO_TO_CITYSCAPES[114] = 9   # water-other         → terrain
+COCO_TO_CITYSCAPES[119] = 2   # ceiling-merged      → building
+COCO_TO_CITYSCAPES[121] = 2   # cabinet-merged      → building
+COCO_TO_CITYSCAPES[123] = 1   # floor-other-merged  → sidewalk
+COCO_TO_CITYSCAPES[125] = 9   # mountain-merged     → terrain
+
 # Identity remap for the Cityscapes model (already predicts 19 classes).
 CITY_TO_CITYSCAPES = torch.arange(NUM_CITYSCAPES_CLASSES, dtype=torch.long)
 
