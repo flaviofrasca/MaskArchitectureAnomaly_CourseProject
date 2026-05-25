@@ -205,7 +205,7 @@ def evaluate_dataset(dataset_path, model, method, device):
 
     anomaly_score_list, ood_gts_list = [], []
 
-    for path in tqdm(image_paths, desc="  images", leave=False):
+    for path in image_paths:
         img_np     = np.array(Image.open(path).convert('RGB'))
         img_tensor = torch.from_numpy(img_np).permute(2, 0, 1)
 
@@ -296,14 +296,14 @@ def main():
 
     for name, pattern in DATASETS:
         full_pattern = os.path.join(args.datadir, pattern)
-        print(f"{name:<20} ", end="", flush=True)
+        print(f"  Evaluating: {name} ...", flush=True)
         result = evaluate_dataset(full_pattern, model, args.method, device)
         if result is not None:
             auprc, fpr95 = result
-            print(f"{auprc:>7.2f}% {fpr95:>7.2f}%")
+            print(f"  {name:<20} AuPRC: {auprc:>7.2f}%   FPR95: {fpr95:>7.2f}%")
             results_file.write(f"  {name:<20} AuPRC: {auprc:.2f}%  FPR@95: {fpr95:.2f}%\n")
         else:
-            print("  SKIPPED")
+            print(f"  {name:<20} SKIPPED")
             results_file.write(f"  {name:<20} SKIPPED\n")
 
     print(f"{'='*60}\n")
