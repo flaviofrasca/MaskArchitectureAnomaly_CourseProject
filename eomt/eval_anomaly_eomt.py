@@ -99,6 +99,12 @@ def build_and_load_model(model_type: str, device):
 
     if os.path.isfile(ckpt_path):
         state_dict = torch.load(ckpt_path, map_location=device, weights_only=True)
+        # Filter out keys with shape mismatch (e.g. pos_embed trained at different img_size)
+        model_state = model.state_dict()
+        state_dict = {
+            k: v for k, v in state_dict.items()
+            if k not in model_state or v.shape == model_state[k].shape
+        }
         model.load_state_dict(state_dict, strict=False)
         print(f"Loaded weights: {ckpt_path}")
     else:
