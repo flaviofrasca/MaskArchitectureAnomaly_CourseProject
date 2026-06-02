@@ -147,7 +147,6 @@ def evaluate_temperature(cache_dir, dataset_name, T):
     if not all_scores:
         return None
 
-    gts    = np.array(all_scores)   # reuse variable for brevity
     scores = np.array(all_scores)
     gts    = np.array(all_gts)
 

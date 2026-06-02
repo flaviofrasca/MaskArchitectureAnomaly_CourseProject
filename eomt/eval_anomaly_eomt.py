@@ -37,7 +37,7 @@ BASE = "/content/drive/.shortcut-targets-by-id/1osgiWms0a4SYz1evCZNwMV-jv--0I0RU
 CHECKPOINTS = {
     "cityscapes": BASE + "/checkpoints/cityscapes/eomt_cityscapes.bin",
     "coco":       BASE + "/checkpoints/coco/eomt_coco.bin",
-    "finetuned":  BASE + "/checkpoints/finetuned/eomt_finetuned.bin",
+    "finetuned":  BASE + "/checkpoints/finetuned_v2/phase3_unfreeze_more/epoch=2-step=2232.ckpt",
 }
 
 CONFIGS = {
@@ -98,7 +98,9 @@ def build_and_load_model(model_type: str, device):
     model = lit_cls(img_size=IMG_SIZE, num_classes=num_classes, network=network, **model_kw)
 
     if os.path.isfile(ckpt_path):
-        state_dict = torch.load(ckpt_path, map_location=device, weights_only=True)
+        raw = torch.load(ckpt_path, map_location=device, weights_only=False)
+        # Lightning .ckpt files nest weights under 'state_dict'; plain .bin files are the dict directly
+        state_dict = raw['state_dict'] if isinstance(raw, dict) and 'state_dict' in raw else raw
         # Filter out keys with shape mismatch (e.g. pos_embed trained at different img_size)
         model_state = model.state_dict()
         state_dict = {
