@@ -124,8 +124,10 @@ def cache_logits(model, dataset_name, dataset_path, cache_dir, device):
 # Step 2: Load logits once, evaluate all temperatures in memory
 # ---------------------------------------------------------------------------
 
+_RESIZE_TO = (640, 640)  # resize logits at load time to keep computation fast
+
 def load_dataset_logits(cache_dir, dataset_name):
-    """Load all cached logits and GTs for a dataset into memory. Returns (logits_list, gts_list)."""
+    """Load cached logits and GTs, resizing to _RESIZE_TO for fast temperature sweep."""
     slug = _slug(dataset_name)
     logits_files = sorted(glob.glob(os.path.join(cache_dir, f"{slug}_*_logits.npy")))
     all_logits, all_gts = [], []
@@ -133,8 +135,17 @@ def load_dataset_logits(cache_dir, dataset_name):
         gp = lp.replace("_logits.npy", "_gt.npy")
         if not os.path.exists(gp):
             continue
-        all_logits.append(np.load(lp).astype(np.float32))
-        all_gts.append(np.load(gp))
+        logit = np.load(lp).astype(np.float32)   # [C, H, W]
+        gt    = np.load(gp)                        # [H, W]
+        H, W  = logit.shape[1], logit.shape[2]
+        if (H, W) != _RESIZE_TO:
+            t = torch.tensor(logit).unsqueeze(0)  # [1, C, H, W]
+            logit = F.interpolate(t, size=_RESIZE_TO, mode='bilinear',
+                                  align_corners=False).squeeze(0).numpy()
+            gt = np.array(Image.fromarray(gt).resize(
+                (_RESIZE_TO[1], _RESIZE_TO[0]), Image.NEAREST))
+        all_logits.append(logit)
+        all_gts.append(gt)
     return all_logits, all_gts
 
 
