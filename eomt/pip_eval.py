@@ -99,6 +99,13 @@ CITY_TO_CITYSCAPES = torch.arange(NUM_CITYSCAPES_CLASSES, dtype=torch.long)
 ERFNET_TO_CITYSCAPES = torch.full((ERF_NUM_CLASSES,), IGNORE_INDEX, dtype=torch.long)
 ERFNET_TO_CITYSCAPES[:NUM_CITYSCAPES_CLASSES] = torch.arange(NUM_CITYSCAPES_CLASSES)
 
+# Cityscapes labelId (0-33) → ERFNet trainId (0-18), 19 = ignore
+LABEL_ID_TO_TRAIN = torch.full((256,), 19, dtype=torch.long)
+for _lid, _tid in {7:0, 8:1, 11:2, 12:3, 13:4, 17:5, 19:6, 20:7, 21:8,
+                   22:9, 23:10, 24:11, 25:12, 26:13, 27:14, 28:15,
+                   31:16, 32:17, 33:18}.items():
+    LABEL_ID_TO_TRAIN[_lid] = _tid
+
 # ---------------------------------------------------------------------------
 # Suppress Lightning checkpoint warning
 # ---------------------------------------------------------------------------
@@ -285,7 +292,7 @@ def evaluate_erfnet(model, cityscapes_path: str, device):
 
         for img_name in tqdm(img_names, desc="Evaluating ERFNet", unit="img"):
             gt_name_norm = norm(img_name).replace('leftImg8bit/', 'gtFine/').replace(
-                '_leftImg8bit.png', '_gtFine_labelTrainIds.png'
+                '_leftImg8bit.png', '_gtFine_labelIds.png'
             )
             if gt_name_norm not in gt_name_map:
                 continue
@@ -293,10 +300,13 @@ def evaluate_erfnet(model, cityscapes_path: str, device):
             with img_zip.open(img_name) as f:
                 img = PILImage.open(BytesIO(f.read())).convert('RGB')
             with gt_zip.open(gt_name_map[gt_name_norm]) as f:
-                gt = PILImage.open(BytesIO(f.read()))
+                gt_np = np.array(PILImage.open(BytesIO(f.read())).resize(
+                    (1024, 512), PILImage.NEAREST))  # [512, 1024]
 
             img_t = img_transform(img).unsqueeze(0).float().to(device)
-            gt_t  = target_transform(gt).unsqueeze(0).to(device)
+            # Convert labelIds → trainIds (0-18, 19=ignore)
+            gt_t  = LABEL_ID_TO_TRAIN[torch.from_numpy(gt_np.astype(np.int64))] \
+                        .unsqueeze(0).unsqueeze(0).to(device)  # [1, 1, 512, 1024]
 
             logits = model(img_t)
             pred   = logits.max(1)[1].unsqueeze(1).data
