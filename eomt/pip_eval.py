@@ -272,24 +272,27 @@ def evaluate_erfnet(model, cityscapes_path: str, device):
     with zipfile.ZipFile(img_zip_path, 'r') as img_zip, \
          zipfile.ZipFile(gt_zip_path,  'r') as gt_zip:
 
-        img_names  = sorted([n for n in img_zip.namelist()
-                             if 'leftImg8bit/val' in n and n.endswith('.png')])
-        gt_name_set = set(gt_zip.namelist())
+        # Normalize: strip leading './' so lookups are consistent
+        def norm(p): return p.lstrip('./')
+
+        img_names   = sorted([n for n in img_zip.namelist()
+                              if 'leftImg8bit/val' in norm(n) and n.endswith('.png')])
+        gt_name_map = {norm(n): n for n in gt_zip.namelist()}
 
         if not img_names:
             print("  [WARNING] No val images found inside zip")
             return None
 
         for img_name in tqdm(img_names, desc="Evaluating ERFNet", unit="img"):
-            gt_name = img_name.replace('leftImg8bit/', 'gtFine/').replace(
+            gt_name_norm = norm(img_name).replace('leftImg8bit/', 'gtFine/').replace(
                 '_leftImg8bit.png', '_gtFine_labelTrainIds.png'
             )
-            if gt_name not in gt_name_set:
+            if gt_name_norm not in gt_name_map:
                 continue
 
             with img_zip.open(img_name) as f:
                 img = PILImage.open(BytesIO(f.read())).convert('RGB')
-            with gt_zip.open(gt_name) as f:
+            with gt_zip.open(gt_name_map[gt_name_norm]) as f:
                 gt = PILImage.open(BytesIO(f.read()))
 
             img_t = img_transform(img).unsqueeze(0).float().to(device)
