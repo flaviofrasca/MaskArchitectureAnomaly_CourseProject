@@ -18,9 +18,9 @@ Usage (run from eomt/ on Colab — no arguments needed if drive is mounted):
     python eval_coco_on_cityscapes.py
 
 Or override any path:
-    python eval_coco_on_cityscapes.py \\
-        --cityscapes_path /path/to/cityscapes \\
-        --city_ckpt /path/to/city.bin \\
+    python eval_coco_on_cityscapes.py \
+        --cityscapes_path /path/to/cityscapes \
+        --city_ckpt /path/to/city.bin \
         --coco_ckpt /path/to/coco.bin
 """
 
@@ -70,49 +70,145 @@ CITYSCAPES_CLASS_NAMES = [
 # 255 = void / ignore (no matching Cityscapes class).
 COCO_TO_CITYSCAPES = torch.full((133,), IGNORE_INDEX, dtype=torch.long)
 
-# --- exact matches ---
-COCO_TO_CITYSCAPES[0]   = 11  # person
-COCO_TO_CITYSCAPES[1]   = 18  # bicycle
-COCO_TO_CITYSCAPES[2]   = 13  # car
-COCO_TO_CITYSCAPES[3]   = 17  # motorcycle
-COCO_TO_CITYSCAPES[5]   = 15  # bus
-COCO_TO_CITYSCAPES[6]   = 16  # train
-COCO_TO_CITYSCAPES[7]   = 14  # truck
-COCO_TO_CITYSCAPES[9]   = 6   # traffic light
-COCO_TO_CITYSCAPES[99]  = 0   # road (stuff)
-COCO_TO_CITYSCAPES[118] = 4   # fence-merged
-COCO_TO_CITYSCAPES[130] = 2   # building-other-merged
+DENSE_COCO_TO_CITYSCAPES_TRAINID = {
+    0: 11,   # person -> person
+    1: 18,   # bicycle -> bicycle
+    2: 13,   # car -> car
+    3: 17,   # motorcycle -> motorcycle
+    4: 255,  # airplane -> void
+    5: 15,   # bus -> bus
+    6: 16,   # train -> train
+    7: 14,   # truck -> truck
+    8: 255,  # boat -> void
+    9: 6,    # traffic light -> traffic light
+    10: 255, # fire hydrant -> void
+    11: 7,   # stop sign -> traffic sign
+    12: 255, # parking meter -> void
+    13: 255, # bench -> void
+    14: 255, # bird -> void
+    15: 255, # cat -> void
+    16: 255, # dog -> void
+    17: 255, # horse -> void
+    18: 255, # sheep -> void
+    19: 255, # cow -> void
+    20: 255, # elephant -> void
+    21: 255, # bear -> void
+    22: 255, # zebra -> void
+    23: 255, # giraffe -> void
+    24: 255, # backpack -> void
+    25: 255, # umbrella -> void
+    26: 255, # handbag -> void
+    27: 255, # tie -> void
+    28: 255, # suitcase -> void
+    29: 255, # frisbee -> void
+    30: 255, # skis -> void
+    31: 255, # snowboard -> void
+    32: 255, # sports ball -> void
+    33: 255, # kite -> void
+    34: 255, # baseball bat -> void
+    35: 255, # baseball glove -> void
+    36: 255, # skateboard -> void
+    37: 255, # surfboard -> void
+    38: 255, # tennis racket -> void
+    39: 255, # bottle -> void
+    40: 255, # wine glass -> void
+    41: 255, # cup -> void
+    42: 255, # fork -> void
+    43: 255, # knife -> void
+    44: 255, # spoon -> void
+    45: 255, # bowl -> void
+    46: 255, # banana -> void
+    47: 255, # apple -> void
+    48: 255, # sandwich -> void
+    49: 255, # orange -> void
+    50: 255, # broccoli -> void
+    51: 255, # carrot -> void
+    52: 255, # hot dog -> void
+    53: 255, # pizza -> void
+    54: 255, # donut -> void
+    55: 255, # cake -> void
+    56: 255, # chair -> void
+    57: 255, # couch -> void
+    58: 255, # potted plant -> void
+    59: 255, # bed -> void
+    60: 255, # dining table -> void
+    61: 255, # toilet -> void
+    62: 255, # tv -> void
+    63: 255, # laptop -> void
+    64: 255, # mouse -> void
+    65: 255, # remote -> void
+    66: 255, # keyboard -> void
+    67: 255, # cell phone -> void
+    68: 255, # microwave -> void
+    69: 255, # oven -> void
+    70: 255, # toaster -> void
+    71: 255, # sink -> void
+    72: 255, # refrigerator -> void
+    73: 255, # book -> void
+    74: 255, # clock -> void
+    75: 255, # vase -> void
+    76: 255, # scissors -> void
+    77: 255, # teddy bear -> void
+    78: 255, # hair drier -> void
+    79: 255, # toothbrush -> void
+    80: 255, # banner -> void
+    81: 255, # blanket -> void
+    82: 255, # bridge -> void
+    83: 255, # cardboard -> void
+    84: 255, # counter -> void
+    85: 255, # curtain -> void
+    86: 255, # door-stuff -> void
+    87: 255, # floor-wood -> void
+    88: 8,   # flower -> vegetation
+    89: 255, # fruit -> void
+    90: 255, # gravel -> void
+    91: 2,   # house -> building
+    92: 255, # light -> void
+    93: 255, # mirror-stuff -> void
+    94: 255, # net -> void
+    95: 255, # pillow -> void
+    96: 255, # platform -> void
+    97: 255, # playingfield -> void
+    98: 255, # railroad -> void
+    99: 255, # river -> void
+    100: 0,  # road -> road
+    101: 2,  # roof -> building
+    102: 255, # sand -> void
+    103: 255, # sea -> void
+    104: 255, # shelf -> void
+    105: 255, # snow -> void
+    106: 255, # stairs -> void
+    107: 255, # tent -> void
+    108: 255, # towel -> void
+    109: 3,  # wall-brick -> wall
+    110: 3,  # wall-stone -> wall
+    111: 3,  # wall-tile -> wall
+    112: 3,  # wall-wood -> wall
+    113: 255, # water-other -> void
+    114: 255, # window-blind -> void
+    115: 255, # window-other -> void
+    116: 8,  # tree-merged -> vegetation
+    117: 4,  # fence-merged -> fence
+    118: 255, # ceiling-merged -> void
+    119: 10, # sky-other-merged -> sky
+    120: 255, # cabinet-merged -> void
+    121: 255, # table-merged -> void
+    122: 255, # floor-other-merged -> void
+    123: 1,  # pavement-merged -> sidewalk
+    124: 255, # mountain-merged -> void
+    125: 9,  # grass-merged -> terrain
+    126: 9,  # dirt-merged -> terrain
+    127: 255, # paper-merged -> void
+    128: 255, # food-other-merged -> void
+    129: 2,  # building-other-merged -> building
+    130: 255, # rock-merged -> void
+    131: 3,  # wall-other-merged -> wall
+    132: 255  # rug-merged -> void
+}
 
-# --- synonyms / groupings ---
-COCO_TO_CITYSCAPES[11]  = 7   # stop sign       → traffic sign
-COCO_TO_CITYSCAPES[12]  = 5   # parking meter   → pole
-COCO_TO_CITYSCAPES[82]  = 2   # bridge          → building
-COCO_TO_CITYSCAPES[86]  = 2   # door-stuff      → building
-COCO_TO_CITYSCAPES[88]  = 8   # flower          → vegetation
-COCO_TO_CITYSCAPES[90]  = 9   # gravel          → terrain
-COCO_TO_CITYSCAPES[91]  = 2   # house           → building
-COCO_TO_CITYSCAPES[92]  = 5   # light           → pole
-COCO_TO_CITYSCAPES[96]  = 1   # platform        → sidewalk
-COCO_TO_CITYSCAPES[97]  = 9   # playingfield    → terrain
-COCO_TO_CITYSCAPES[100] = 2   # roof            → building
-COCO_TO_CITYSCAPES[101] = 9   # sand            → terrain
-COCO_TO_CITYSCAPES[104] = 9   # snow            → terrain
-COCO_TO_CITYSCAPES[105] = 1   # stairs          → sidewalk
-COCO_TO_CITYSCAPES[108] = 3   # wall-brick      → wall
-COCO_TO_CITYSCAPES[109] = 3   # wall-concrete   → wall
-COCO_TO_CITYSCAPES[110] = 3   # wall-panel      → wall
-COCO_TO_CITYSCAPES[111] = 3   # wall-stone      → wall
-COCO_TO_CITYSCAPES[112] = 3   # wall-tile       → wall
-COCO_TO_CITYSCAPES[113] = 3   # wall-wood       → wall
-COCO_TO_CITYSCAPES[115] = 2   # window-blind    → building
-COCO_TO_CITYSCAPES[116] = 2   # window-other    → building
-COCO_TO_CITYSCAPES[117] = 8   # tree-merged     → vegetation
-COCO_TO_CITYSCAPES[120] = 10  # sky-other-merged → sky
-COCO_TO_CITYSCAPES[124] = 1   # pavement-merged → sidewalk
-COCO_TO_CITYSCAPES[126] = 9   # grass-merged    → terrain
-COCO_TO_CITYSCAPES[127] = 9   # dirt-merged     → terrain
-COCO_TO_CITYSCAPES[131] = 9   # rock-merged     → terrain
-COCO_TO_CITYSCAPES[132] = 3   # wall-other-merged → wall
+# Populate the tensor using the new mapping dictionary
+for coco_idx, city_idx in DENSE_COCO_TO_CITYSCAPES_TRAINID.items():
+    COCO_TO_CITYSCAPES[coco_idx] = city_idx
 
 # Identity remap for the Cityscapes model (already predicts 19 classes).
 CITY_TO_CITYSCAPES = torch.arange(NUM_CITYSCAPES_CLASSES, dtype=torch.long)
