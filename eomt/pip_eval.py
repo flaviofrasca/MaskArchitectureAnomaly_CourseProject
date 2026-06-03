@@ -245,6 +245,8 @@ def evaluate_eomt(model, val_dataset, device, remap: torch.Tensor):
 
 @torch.no_grad()
 def evaluate_erfnet(model, cityscapes_path: str, device):
+    import zipfile
+    from io import BytesIO
     from iouEval import iouEval
     from transform import Relabel, ToLabel
 
@@ -258,32 +260,48 @@ def evaluate_erfnet(model, cityscapes_path: str, device):
         Relabel(255, 19),  # ignore label → 19 (as in original eval_iou.py)
     ])
 
-    img_paths = sorted(glob.glob(
-        os.path.join(cityscapes_path, "leftImg8bit", "val", "*", "*.png")
-    ))
-    if not img_paths:
-        print("  [WARNING] No Cityscapes val images found — check --cityscapes_path")
+    img_zip_path = os.path.join(cityscapes_path, "leftImg8bit_trainvaltest.zip")
+    gt_zip_path  = os.path.join(cityscapes_path, "gtFine_trainvaltest.zip")
+
+    if not os.path.isfile(img_zip_path) or not os.path.isfile(gt_zip_path):
+        print("  [WARNING] Cityscapes zip files not found — check --cityscapes_path")
         return None
 
     iou_eval = iouEval(ERF_NUM_CLASSES)  # ignoreIndex=19 by default
 
-    for img_path in tqdm(img_paths, desc="Evaluating ERFNet", unit="img"):
-        gt_path = img_path.replace("leftImg8bit", "gtFine").replace(
-            "_leftImg8bit.png", "_gtFine_labelTrainIds.png"
-        )
-        if not os.path.exists(gt_path):
-            continue
+    with zipfile.ZipFile(img_zip_path, 'r') as img_zip, \
+         zipfile.ZipFile(gt_zip_path,  'r') as gt_zip:
 
-        img = img_transform(PILImage.open(img_path).convert('RGB')).unsqueeze(0).float().to(device)
-        gt  = target_transform(PILImage.open(gt_path)).unsqueeze(0).to(device)
+        img_names  = sorted([n for n in img_zip.namelist()
+                             if 'leftImg8bit/val' in n and n.endswith('.png')])
+        gt_name_set = set(gt_zip.namelist())
 
-        logits = model(img)                              # [1, 20, H, W]
-        pred   = logits.max(1)[1].unsqueeze(1).data     # [1, 1, H, W]
+        if not img_names:
+            print("  [WARNING] No val images found inside zip")
+            return None
 
-        iou_eval.addBatch(pred, gt)
+        for img_name in tqdm(img_names, desc="Evaluating ERFNet", unit="img"):
+            gt_name = img_name.replace('leftImg8bit/', 'gtFine/').replace(
+                '_leftImg8bit.png', '_gtFine_labelTrainIds.png'
+            )
+            if gt_name not in gt_name_set:
+                continue
+
+            with img_zip.open(img_name) as f:
+                img = PILImage.open(BytesIO(f.read())).convert('RGB')
+            with gt_zip.open(gt_name) as f:
+                gt = PILImage.open(BytesIO(f.read()))
+
+            img_t = img_transform(img).unsqueeze(0).float().to(device)
+            gt_t  = target_transform(gt).unsqueeze(0).to(device)
+
+            logits = model(img_t)
+            pred   = logits.max(1)[1].unsqueeze(1).data
+
+            iou_eval.addBatch(pred, gt_t)
 
     miou, iou_per_class = iou_eval.getIoU()
-    return iou_per_class  # tensor of 19 values (class 19 ignored internally)
+    return iou_per_class
 
 
 # ---------------------------------------------------------------------------
