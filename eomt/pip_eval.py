@@ -240,14 +240,22 @@ def evaluate_eomt(model, val_dataset, device, remap: torch.Tensor):
 
 
 # ---------------------------------------------------------------------------
-# Evaluation loop — ERFNet (pixel-based)
+# Evaluation loop — ERFNet (pixel-based, uses iouEval as in the original repo)
 # ---------------------------------------------------------------------------
 
 @torch.no_grad()
 def evaluate_erfnet(model, cityscapes_path: str, device):
+    from iouEval import iouEval
+    from transform import Relabel, ToLabel
+
     img_transform = Compose([
-        Resize((512, 1024), PILImage.BILINEAR),
+        Resize(512, PILImage.BILINEAR),
         ToTensor(),
+    ])
+    target_transform = Compose([
+        Resize(512, PILImage.NEAREST),
+        ToLabel(),
+        Relabel(255, 19),  # ignore label → 19 (as in original eval_iou.py)
     ])
 
     img_paths = sorted(glob.glob(
@@ -257,13 +265,7 @@ def evaluate_erfnet(model, cityscapes_path: str, device):
         print("  [WARNING] No Cityscapes val images found — check --cityscapes_path")
         return None
 
-    remap  = ERFNET_TO_CITYSCAPES.to(device)
-    metric = MulticlassJaccardIndex(
-        num_classes=NUM_CITYSCAPES_CLASSES,
-        validate_args=False,
-        ignore_index=IGNORE_INDEX,
-        average=None,
-    ).to(device)
+    iou_eval = iouEval(ERF_NUM_CLASSES)  # ignoreIndex=19 by default
 
     for img_path in tqdm(img_paths, desc="Evaluating ERFNet", unit="img"):
         gt_path = img_path.replace("leftImg8bit", "gtFine").replace(
@@ -273,28 +275,15 @@ def evaluate_erfnet(model, cityscapes_path: str, device):
             continue
 
         img = img_transform(PILImage.open(img_path).convert('RGB')).unsqueeze(0).float().to(device)
+        gt  = target_transform(PILImage.open(gt_path)).unsqueeze(0).to(device)
 
-        logits   = model(img)            # [1, 20, 512, 1024]
-        pred     = logits.argmax(1)[0]   # [512, 1024]
-        pred_mapped = remap[pred]        # [512, 1024]
+        logits = model(img)                              # [1, 20, H, W]
+        pred   = logits.max(1)[1].unsqueeze(1).data     # [1, 1, H, W]
 
-        gt_np = np.array(PILImage.open(gt_path))   # train IDs, 255 = ignore
-        gt    = torch.tensor(gt_np, dtype=torch.long, device=device)
-        # Resize GT to match ERFNet output (512×1024)
-        if gt.shape != (512, 1024):
-            gt = torch.tensor(
-                np.array(PILImage.fromarray(gt_np).resize((1024, 512), PILImage.NEAREST)),
-                dtype=torch.long, device=device
-            )
-        gt = torch.where(gt > 18, torch.tensor(IGNORE_INDEX, device=device), gt)
+        iou_eval.addBatch(pred, gt)
 
-        ignore_mask = (pred_mapped == IGNORE_INDEX) | (gt == IGNORE_INDEX)
-        gt_upd   = gt.clone();          gt_upd[ignore_mask]   = IGNORE_INDEX
-        pred_upd = pred_mapped.clone(); pred_upd[ignore_mask] = 0
-
-        metric.update(pred_upd[None], gt_upd[None])
-
-    return metric.compute()
+    miou, iou_per_class = iou_eval.getIoU()
+    return iou_per_class  # tensor of 19 values (class 19 ignored internally)
 
 
 # ---------------------------------------------------------------------------
