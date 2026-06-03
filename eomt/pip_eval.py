@@ -1,14 +1,27 @@
 """
-Evaluate all four models on the Cityscapes val set using mIoU:
+Evaluate BOTH EoMT models on the Cityscapes val set using the same
+semantic-inference pipeline, enabling fair mIoU comparison:
 
-  1. EoMT Cityscapes  (19 classes, identity remap)
-  2. EoMT COCO        (133 classes, COCO→Cityscapes remap)
-  3. EoMT Finetuned   (19 classes, identity remap, Lightning .ckpt)
-  4. ERFNet           (20 classes, class-19 = unlabeled → ignore)
+  - Cityscapes-trained model  (19 classes  → identity remap)
+  - COCO-panoptic model       (133 classes → COCO→Cityscapes remap)
 
-Usage (run from eomt/ on Colab):
-    python pip_eval.py
-    python pip_eval.py --skip_city --skip_coco   # only erfnet + finetuned
+Key design choices
+------------------
+* Semantic inference (window_imgs_semantic + to_per_pixel_logits_semantic) is
+  used for BOTH models — the only fair comparison: panoptic inference adds
+  NMS / overlap thresholds that the Cityscapes model never uses.
+* Classes with no COCO equivalent are mapped to 255 (ignore_index).
+* 'rider' (train_id 12) will always score ~0 for the COCO model — COCO
+  annotates riders as 'person'. Mention this limitation in the report.
+
+Usage (run from eomt/ on Colab — no arguments needed if drive is mounted):
+    python eval_coco_on_cityscapes.py
+
+Or override any path:
+    python eval_coco_on_cityscapes.py \
+        --cityscapes_path /path/to/cityscapes \
+        --city_ckpt /path/to/city.bin \
+        --coco_ckpt /path/to/coco.bin
 """
 
 import argparse
@@ -93,6 +106,147 @@ COCO_TO_CITYSCAPES = torch.full((133,), IGNORE_INDEX, dtype=torch.long)
 for coco_id, city_id in DENSE_COCO_TO_CITYSCAPES_TRAINID.items():
     COCO_TO_CITYSCAPES[coco_id] = city_id
 
+DENSE_COCO_TO_CITYSCAPES_TRAINID = {
+    0: 11,   # person -> person
+    1: 18,   # bicycle -> bicycle
+    2: 13,   # car -> car
+    3: 17,   # motorcycle -> motorcycle
+    4: 255,  # airplane -> void
+    5: 15,   # bus -> bus
+    6: 16,   # train -> train
+    7: 14,   # truck -> truck
+    8: 255,  # boat -> void
+    9: 6,    # traffic light -> traffic light
+    10: 255, # fire hydrant -> void
+    11: 7,   # stop sign -> traffic sign
+    12: 255, # parking meter -> void
+    13: 255, # bench -> void
+    14: 255, # bird -> void
+    15: 255, # cat -> void
+    16: 255, # dog -> void
+    17: 255, # horse -> void
+    18: 255, # sheep -> void
+    19: 255, # cow -> void
+    20: 255, # elephant -> void
+    21: 255, # bear -> void
+    22: 255, # zebra -> void
+    23: 255, # giraffe -> void
+    24: 255, # backpack -> void
+    25: 255, # umbrella -> void
+    26: 255, # handbag -> void
+    27: 255, # tie -> void
+    28: 255, # suitcase -> void
+    29: 255, # frisbee -> void
+    30: 255, # skis -> void
+    31: 255, # snowboard -> void
+    32: 255, # sports ball -> void
+    33: 255, # kite -> void
+    34: 255, # baseball bat -> void
+    35: 255, # baseball glove -> void
+    36: 255, # skateboard -> void
+    37: 255, # surfboard -> void
+    38: 255, # tennis racket -> void
+    39: 255, # bottle -> void
+    40: 255, # wine glass -> void
+    41: 255, # cup -> void
+    42: 255, # fork -> void
+    43: 255, # knife -> void
+    44: 255, # spoon -> void
+    45: 255, # bowl -> void
+    46: 255, # banana -> void
+    47: 255, # apple -> void
+    48: 255, # sandwich -> void
+    49: 255, # orange -> void
+    50: 255, # broccoli -> void
+    51: 255, # carrot -> void
+    52: 255, # hot dog -> void
+    53: 255, # pizza -> void
+    54: 255, # donut -> void
+    55: 255, # cake -> void
+    56: 255, # chair -> void
+    57: 255, # couch -> void
+    58: 255, # potted plant -> void
+    59: 255, # bed -> void
+    60: 255, # dining table -> void
+    61: 255, # toilet -> void
+    62: 255, # tv -> void
+    63: 255, # laptop -> void
+    64: 255, # mouse -> void
+    65: 255, # remote -> void
+    66: 255, # keyboard -> void
+    67: 255, # cell phone -> void
+    68: 255, # microwave -> void
+    69: 255, # oven -> void
+    70: 255, # toaster -> void
+    71: 255, # sink -> void
+    72: 255, # refrigerator -> void
+    73: 255, # book -> void
+    74: 255, # clock -> void
+    75: 255, # vase -> void
+    76: 255, # scissors -> void
+    77: 255, # teddy bear -> void
+    78: 255, # hair drier -> void
+    79: 255, # toothbrush -> void
+    80: 255, # banner -> void
+    81: 255, # blanket -> void
+    82: 255, # bridge -> void
+    83: 255, # cardboard -> void
+    84: 255, # counter -> void
+    85: 255, # curtain -> void
+    86: 255, # door-stuff -> void
+    87: 255, # floor-wood -> void
+    88: 8,   # flower -> vegetation
+    89: 255, # fruit -> void
+    90: 255, # gravel -> void
+    91: 2,   # house -> building
+    92: 255, # light -> void
+    93: 255, # mirror-stuff -> void
+    94: 255, # net -> void
+    95: 255, # pillow -> void
+    96: 255, # platform -> void
+    97: 255, # playingfield -> void
+    98: 255, # railroad -> void
+    99: 255, # river -> void
+    100: 0,  # road -> road
+    101: 2,  # roof -> building
+    102: 255, # sand -> void
+    103: 255, # sea -> void
+    104: 255, # shelf -> void
+    105: 255, # snow -> void
+    106: 255, # stairs -> void
+    107: 255, # tent -> void
+    108: 255, # towel -> void
+    109: 3,  # wall-brick -> wall
+    110: 3,  # wall-stone -> wall
+    111: 3,  # wall-tile -> wall
+    112: 3,  # wall-wood -> wall
+    113: 255, # water-other -> void
+    114: 255, # window-blind -> void
+    115: 255, # window-other -> void
+    116: 8,  # tree-merged -> vegetation
+    117: 4,  # fence-merged -> fence
+    118: 255, # ceiling-merged -> void
+    119: 10, # sky-other-merged -> sky
+    120: 255, # cabinet-merged -> void
+    121: 255, # table-merged -> void
+    122: 255, # floor-other-merged -> void
+    123: 1,  # pavement-merged -> sidewalk
+    124: 255, # mountain-merged -> void
+    125: 9,  # grass-merged -> terrain
+    126: 9,  # dirt-merged -> terrain
+    127: 255, # paper-merged -> void
+    128: 255, # food-other-merged -> void
+    129: 2,  # building-other-merged -> building
+    130: 255, # rock-merged -> void
+    131: 3,  # wall-other-merged -> wall
+    132: 255  # rug-merged -> void
+}
+
+# Populate the tensor using the new mapping dictionary
+for coco_idx, city_idx in DENSE_COCO_TO_CITYSCAPES_TRAINID.items():
+    COCO_TO_CITYSCAPES[coco_idx] = city_idx
+
+# Identity remap for the Cityscapes model (already predicts 19 classes).
 CITY_TO_CITYSCAPES = torch.arange(NUM_CITYSCAPES_CLASSES, dtype=torch.long)
 
 # ERFNet: class 19 (unlabeled) → ignore, classes 0-18 → identity
